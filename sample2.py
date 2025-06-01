@@ -8,7 +8,7 @@ import csv
 import mediapipe as mp
 from mediapipe.framework.formats import landmark_pb2
 
-# mediapipe 初期化
+# mediapipe初期化
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
