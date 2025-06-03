@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pose Comparison (MediaPipe JS)</title>
+  <style>
+    /* キャンバスとビデオを同じ位置に重ねる */
+    #container {
+      position: relative;
+      width: 640px;  /* 任意の幅に調整可 */
+      height: 480px; /* 任意の高さに調整可 */
+    }
+    video, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1); /* ミラー表示（左右反転） */
+    }
+  </style>
+</head>
+<body>
+  <h2>お手本と自分の骨格を重ねて比較</h2>
+  <div id="container">
+    <video id="input_video" autoplay playsinline></video>
+    <canvas id="output_canvas"></canvas>
+  </div>
+
+  <!-- MediaPipe Pose JS ライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <script>
+  (async () => {
+    // ────────────────────────────────────────────────────────────
+    // 1) CSV を読み込んで「フレーム→お手本ランドマーク一覧」を作る
+    // ────────────────────────────────────────────────────────────
+    const CSV_URL = 'landmarks_output.csv';
+    // frameNo → [ {x,y,z,visibility}, ... ] のマッピング
+    const landmarkDict = {};
+
+    // fetch してテキスト取得→シンプルな手動パース
+    const csvText = await fetch(CSV_URL).then(res => res.text());
+    {
+      const lines = csvText.trim().split('\n');
+      // 1行目はヘッダーなのでスキップ
+      const header = lines[0].split(',');
+      // 想定ヘッダー： frame,joint,x,y,z,visibility
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(s => s.trim());
+        const frameNo = parseInt(cols[0], 10);
+        const x = parseFloat(cols[2]);
+        const y = parseFloat(cols[3]);
+        const z = parseFloat(cols[4]);
+        const vis = parseFloat(cols[5]);
+        if (!(frameNo in landmarkDict)) {
+          landmarkDict[frameNo] = [];
+        }
+        landmarkDict[frameNo].push({ x, y, z, visibility: vis });
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 2) HTML要素を取得・キャンバスを初期化
+    // ────────────────────────────────────────────────────────────
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    // 最終的に「ミラー表示」するので、CSS で左右反転(transform: scaleX(-1)) をかけている
+    // 内部ではあえて正しい座標のまま描画して、CSS反転に任せる。
+
+    // ────────────────────────────────────────────────────────────
+    // 3) MediaPipe Pose の初期化
+    // ────────────────────────────────────────────────────────────
+    const pose = new Pose({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+      }
+    });
+    pose.setOptions({
+      modelComplexity: 2,
+      enableSegmentation: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    // 「フレームカウンター」をインクリメントしながら進める
+    let frameCounter = 0;
+    const OFFSET_Y = 0.1; // お手本を下にずらす（Normalized座標で 0〜1 のうち 0.1分）
+
+    // ────────────────────────────────────────────────────────────
+    // 4) カメラ映像をキャプチャしつつ Pose 推定 → 描画ループ
+    // ────────────────────────────────────────────────────────────
+    pose.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await pose.send({ image: videoElement });
+      },
+      width: 640,   // 任意の解像度に合わせて調整
+      height: 480
+    });
+    camera.start();
+
+    // ────────────────────────────────────────────────────────────
+    // 5) onResults コールバック：１フレームごとに呼ばれる
+    // ────────────────────────────────────────────────────────────
+    function onResults(results) {
+      // ① キャンバスをクリアして、背景にカメラ画像を描画
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(
+        results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      // ② お手本ランドマークを描画（緑）
+      if (frameCounter in landmarkDict) {
+        // フレームに対応するランドマーク一覧を取得
+        const exampleList = landmarkDict[frameCounter];
+        // MediaPipe の NormalizedLandmarkList 形式に合わせて変換
+        const offsetLandmarks = exampleList.map(lm => {
+          // y に OFFSET_Y を加えて下にずらし、1.0を超えないように clamp
+          const newY = Math.min(lm.y + OFFSET_Y, 1.0);
+          return { x: lm.x, y: newY, z: lm.z, visibility: lm.visibility };
+        });
+        // drawLandmarks の形式は単純なオブジェクト配列でもOK
+        drawLandmarksAndConnections(
+          offsetLandmarks,
+          POSE_CONNECTIONS,
+          /*landmarkColor=*/ { r: 0, g: 255, b: 0 },
+          /*connectionColor=*/ { r: 0, g: 255, b: 0 }
+        );
+      }
+
+      // ③ ユーザー自身のランドマークを描画（白）
+      if (results.poseLandmarks) {
+        drawLandmarksAndConnections(
+          results.poseLandmarks,
+          POSE_CONNECTIONS,
+          /*landmarkColor=*/ { r: 255, g: 255, b: 255 },
+          /*connectionColor=*/ { r: 255, g: 255, b: 255 }
+        );
+      }
+
+      canvasCtx.restore();
+      frameCounter++;
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 6) 補助：ランドマークと接続線を描画する関数
+    //    → MediaPipe のドキュメントにある drawing_utils を利用
+    // ────────────────────────────────────────────────────────────
+    // POSE_CONNECTIONS は mediapipe.pose.POSE_CONNECTIONS
+    const { PoseLandmarker, POSE_CONNECTIONS } = window.mpPose  || {}; 
+    // （上記が undefined になる場合は以下の固定配列を使うか、ライブラリ側で提供される定数を参照してください）
+    // ※ この例では「window.mpPose.POSE_CONNECTIONS」を利用しますが、
+    //    CDN で読み込む場合は直接 "POSE_CONNECTIONS" がグローバルに置かれます。
+
+    /**
+     * drawLandmarks と drawConnectors のラッパー
+     * @param {Array<{x:number,y:number,z:number,visibility:number}>} landmarks
+     * @param {Array<[number, number]>} connections
+     * @param {{r:number,g:number,b:number}} landmarkColor
+     * @param {{r:number,g:number,b:number}} connectionColor
+     */
+    function drawLandmarksAndConnections(landmarks, connections, landmarkColor, connectionColor) {
+      // 1) ランドマークだけ描画
+      window.drawLandmarks(
+        canvasCtx,
+        landmarks,
+        { color: landmarkColor, lineWidth: 2, radius: 2 }
+      );
+      // 2) 接続線だけ描画
+      window.drawConnectors(
+        canvasCtx,
+        landmarks,
+        connections,
+        { color: connectionColor, lineWidth: 2 }
+      );
+    }
+
+  })();
+  </script>
+</body>
+</html>
