@@ -1,6 +1,3 @@
-# コードの意味理解する
-# 位置調整できないか試す
-
 import cv2
 import csv
 import mediapipe as mp
