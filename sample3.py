@@ -47,12 +47,33 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
             OFFSET_Y = 0.1  # 画面下に10%ずらす（必要に応じて調整）
             example_landmarks_offset = []
             for lm in landmark_dict[frame_counter]:
-                new_lm = landmark_pb2.NormalizedLandmark()
-                new_lm.x = lm.x
-                new_lm.y = min(lm.y + OFFSET_Y, 1.0)  # 下にずらす（1.0を超えないように）
-                new_lm.z = lm.z
-                new_lm.visibility = lm.visibility
-                example_landmarks_offset.append(new_lm)
+                OFFSET_Y = 0.1  # 下にずらす
+                SCALE = 1.5     # 拡大率
+
+                landmarks = landmark_dict[frame_counter]
+
+                # 腰の中心（左腰:23番, 右腰:24番）
+                if len(landmarks) > 24:
+                    base_lm1 = landmarks[23]
+                    base_lm2 = landmarks[24]
+                    center_x = (base_lm1.x + base_lm2.x) / 2
+                    center_y = (base_lm1.y + base_lm2.y) / 2
+                    center_z = (base_lm1.z + base_lm2.z) / 2
+                else:
+                    center_x, center_y, center_z = 0.5, 0.5, 0.0  # 万一のため中央を仮定
+
+                example_landmarks_offset = []
+                for lm in landmarks:
+                    new_lm = landmark_pb2.NormalizedLandmark()
+
+                    # 中心からスケーリング＋オフセット
+                    new_lm.x = min(max(center_x + (lm.x - center_x) * SCALE, 0.0), 1.0)
+                    new_lm.y = min(max(center_y + (lm.y - center_y) * SCALE + OFFSET_Y, 0.0), 1.0)
+                    new_lm.z = (lm.z - center_z) * SCALE + center_z
+                    new_lm.visibility = lm.visibility
+
+                    example_landmarks_offset.append(new_lm)
+
 
             example_landmarks = landmark_pb2.NormalizedLandmarkList(landmark=example_landmarks_offset)
 
