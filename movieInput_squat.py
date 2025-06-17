@@ -1,6 +1,6 @@
 import csv
 
-landmark_output_path = 'landmarks_output.csv'
+landmark_output_path = 'landmarks_output_squat_s.csv'
 csv_file = open(landmark_output_path, 'w', newline='')
 csv_writer = csv.writer(csv_file)
 
@@ -22,7 +22,7 @@ mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
 
 # 動画ファイル読み込み
-input_filename = 'sample1_movie.mp4'
+input_filename = 'movie/squat_s.mp4'
 video_data = cv2.VideoCapture(input_filename)
 video_width = int(video_data.get(cv2.CAP_PROP_FRAME_WIDTH))    
 video_hight = int(video_data.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -68,7 +68,7 @@ with mp_pose.Pose(
       continue
 
     for i, lm in enumerate(results.pose_landmarks.landmark):
-        print(f"Frame {loop_counter}, Joint {i}: x={lm.x:.4f}, y={lm.y:.4f}, z={lm.z:.4f}, visibility={lm.visibility:.4f}")
+        # print(f"Frame {loop_counter}, Joint {i}: x={lm.x:.4f}, y={lm.y:.4f}, z={lm.z:.4f}, visibility={lm.visibility:.4f}")
         csv_writer.writerow([loop_counter, i, lm.x, lm.y, lm.z, lm.visibility])
 
     #解析結果を動画に描画
