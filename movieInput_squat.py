@@ -1,3 +1,5 @@
+# フレーム数あってる？
+
 import csv
 
 landmark_output_path = 'landmarks_output_squat_s.csv'
