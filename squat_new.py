@@ -19,6 +19,52 @@ def draw_text_with_background(frame, text, position, font_scale=1, color=(0, 255
     # テキストを描画
     cv2.putText(frame, text, position, font, font_scale, color, thickness)
 
+def draw_centered_text_top(frame, text, font_scale=1.5, color=(0, 255, 255), thickness=3, y_offset=100):
+    """画面中央上部にテキストを描画する関数（背景付き）"""
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # テキストを複数行に分割
+    lines = text.split('\n')
+    
+    # 各行のサイズを計算
+    line_heights = []
+    line_widths = []
+    
+    for line in lines:
+        (text_width, text_height), baseline = cv2.getTextSize(line, font, font_scale, thickness)
+        line_heights.append(text_height)
+        line_widths.append(text_width)
+    
+    # 全体の高さを計算（行間40で固定）
+    line_spacing = 40
+    total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
+    
+    # 開始Y座標を計算（上部配置）
+    h, w = frame.shape[:2]
+    start_y = y_offset
+    
+    # 各行を描画
+    current_y = start_y
+    for i, line in enumerate(lines):
+        # X座標を計算（中央揃え）
+        text_x = (w - line_widths[i]) // 2
+        text_y = current_y + line_heights[i]
+        
+        # 背景矩形を描画
+        padding = 20
+        bg_x1 = text_x - padding
+        bg_y1 = text_y - line_heights[i] - padding
+        bg_x2 = text_x + line_widths[i] + padding
+        bg_y2 = text_y + padding
+        
+        cv2.rectangle(frame, (bg_x1, bg_y1), (bg_x2, bg_y2), (50, 50, 50), -1)
+        cv2.rectangle(frame, (bg_x1, bg_y1), (bg_x2, bg_y2), color, 2)
+        
+        # テキストを描画
+        cv2.putText(frame, line, (text_x, text_y), font, font_scale, color, thickness)
+        
+        current_y += line_heights[i] + line_spacing  # 次の行へ
+
 import cv2
 import csv
 import time
@@ -46,7 +92,7 @@ def create_instruction_screen(width=1280, height=720, bg_color=(30, 30, 30)):
     screen[:] = bg_color
     return screen
 
-def draw_centered_text(frame, text, font_scale=2, color=(255, 255, 255), thickness=3, y_offset=0, line_spacing=40):
+def draw_centered_text(frame, text, font_scale=1.5, color=(255, 255, 255), thickness=3, y_offset=0, line_spacing=40):
     """画面中央にテキストを描画する関数（行間調整可能）"""
     font = cv2.FONT_HERSHEY_SIMPLEX
     
@@ -116,11 +162,11 @@ def evaluate_squat_angle(angle):
     """スクワット角度を評価してメッセージを返す"""
     if angle >= 160:
         return "Bend your knees more.", (0, 100, 255)  # オレンジ色
-    elif 100 <= angle <= 159:
+    elif 90 <= angle <= 159:
         return "Good!", (0, 255, 0)  # 緑色
-    elif 75 <= angle <= 99:
+    elif 65 <= angle <= 89:
         return "Excellent!!", (0, 255, 255)  # 黄色
-    else:  # 74度以下
+    else:  # 64度以下
         return "Too much.", (0, 0, 255)  # 赤色
 
 def draw_evaluation_message(frame, message, color, angle):
@@ -148,7 +194,7 @@ INSTRUCTIONS = {
 # === 腰が一番低いフレームを抽出 ===
 landmark_y = defaultdict(list)
 
-with open('landmarks_output_squat.csv', newline='') as csvfile:
+with open('trainer_squat.csv', newline='') as csvfile:
     reader = csv.DictReader(csvfile)
     for row in reader:
         frame = int(row['frame'])
@@ -179,7 +225,7 @@ LANDMARK_COLORS = [
 ] * 2
 
 landmark_dict = {}
-with open('landmarks_output_squat.csv', newline='') as csvfile:
+with open('trainer_squat.csv', newline='') as csvfile:
     reader = csv.DictReader(csvfile)
     for row in reader:
         frame = int(row['frame'])
@@ -220,7 +266,7 @@ instruction_start_time = None
 INSTRUCTION_DURATION = 5  # 指示画面表示時間（秒）
 
 # ユーザーの保存用csv用意
-user_csv = open('landmarks_user_squat.csv', 'w', newline='')
+user_csv = open('user_squat.csv', 'w', newline='')
 user_writer = csv.writer(user_csv)
 user_writer.writerow(['frame', 'id', 'x', 'y', 'z', 'visibility'])
 
@@ -237,12 +283,13 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
             # 指示画面を作成
             instruction_frame = create_instruction_screen()
             
+            # ★修正点②: 全ての指示を同じフォントサイズ(1.5)で表示
             if mode == 'instruction_intro':
                 draw_centered_text(instruction_frame, INSTRUCTIONS['intro'], font_scale=1.5, line_spacing=50)
             elif mode == 'instruction_learning':
                 draw_centered_text(instruction_frame, INSTRUCTIONS['learning'], font_scale=1.5, line_spacing=50)
             elif mode == 'instruction_checkpoint':
-                draw_centered_text(instruction_frame, INSTRUCTIONS['checkpoint'], font_scale=1.2, line_spacing=60)
+                draw_centered_text(instruction_frame, INSTRUCTIONS['checkpoint'], font_scale=1.5, line_spacing=60)
             
             # 残り時間を計算して円形タイマー表示
             elapsed_time = time.time() - instruction_start_time
@@ -268,7 +315,7 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
         # === お手本動画の再生 ===
         elif mode == 'example_video':
             # お手本動画を再生（コメントアウト部分を使用）
-            example_video = cv2.VideoCapture('movie/squat.mp4')
+            example_video = cv2.VideoCapture('movie/squat_new.mp4')
             
             while example_video.isOpened():
                 ret, frame = example_video.read()
@@ -304,9 +351,9 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
                 mode = 'countdown'
                 countdown_start_time = time.time()
             
-            # 待機メッセージを背景付きで表示
-            draw_text_with_background(frame, "Raise both hands to start!", (50, 100), 
-                                    font_scale=1, color=(0, 255, 255), bg_color=(50, 50, 50))
+            # ★修正点①: 待機メッセージを画面中央上部に表示
+            draw_centered_text_top(frame, "Raise both hands to start!", 
+                                 font_scale=1.0, color=(255, 255, 255), thickness=2, y_offset=100)
 
         elif mode == 'countdown':
             elapsed = time.time() - countdown_start_time
@@ -464,14 +511,9 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
                 draw_evaluation_message(frame, current_evaluation_message, current_evaluation_color, current_knee_angle)
 
         elif mode == 'end':
-            text = "Training Finished!"
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            scale = 2
-            thickness = 5
-            (text_width, text_height), baseline = cv2.getTextSize(text, font, scale, thickness)
-            text_x = (frame.shape[1] - text_width) // 2
-            text_y = (frame.shape[0] + text_height) // 2
-            cv2.putText(frame, text, (text_x, text_y), font, scale, (0, 255, 255), thickness)
+            # ★修正点③: "Training Finished!"を背景付きで画面中央上部に表示
+            draw_centered_text_top(frame, "Training Finished!", 
+                                 font_scale=2, color=(255, 255, 255), y_offset=100)
             cv2.imshow('Squat Training System', frame)
             cv2.waitKey(3000)
             break
