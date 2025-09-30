@@ -160,9 +160,9 @@ def draw_countdown_circle(frame, remaining_time, total_time=5):
 
 def evaluate_squat_angle(angle):
     """スクワット角度を評価してメッセージを返す"""
-    if angle >= 160:
+    if angle >= 140:
         return "Bend your knees more.", (0, 100, 255)  # オレンジ色
-    elif 90 <= angle <= 159:
+    elif 90 <= angle <= 139:
         return "Good!", (0, 255, 0)  # 緑色
     elif 65 <= angle <= 89:
         return "Excellent!!", (0, 255, 255)  # 黄色
@@ -191,6 +191,43 @@ INSTRUCTIONS = {
     'checkpoint': "Pay attention to the checkpoints.\nTo finish, make a circle with both arms."
 }
 
+# === 関節ごとに異なる色を割り当て（全33個の関節用）===
+LANDMARK_COLORS = [
+    (255, 0, 0),      # 0: 鼻 - 赤
+    (255, 50, 0),     # 1: 左目内側 - オレンジ赤
+    (255, 100, 0),    # 2: 左目 - 濃いオレンジ
+    (255, 150, 0),    # 3: 左目外側 - オレンジ
+    (255, 200, 0),    # 4: 右目内側 - 明るいオレンジ
+    (255, 255, 0),    # 5: 右目 - 黄色
+    (200, 255, 0),    # 6: 右目外側 - 黄緑
+    (150, 255, 0),    # 7: 左耳 - 緑黄色
+    (100, 255, 0),    # 8: 右耳 - 黄緑
+    (50, 255, 0),     # 9: 口左 - 明るい緑
+    (0, 255, 0),      # 10: 口右 - 緑
+    (0, 255, 100),    # 11: 左肩 - 緑青
+    (0, 255, 200),    # 12: 右肩 - シアン緑
+    (0, 200, 255),    # 13: 左肘 - 明るいシアン
+    (0, 150, 255),    # 14: 右肘 - シアン
+    (0, 100, 255),    # 15: 左手首 - 青シアン
+    (0, 50, 255),     # 16: 右手首 - 明るい青
+    (0, 0, 255),      # 17: 左小指 - 青
+    (50, 0, 255),     # 18: 右小指 - 青紫
+    (100, 0, 255),    # 19: 左人差し指 - 紫青
+    (150, 0, 255),    # 20: 右人差し指 - 紫
+    (200, 0, 255),    # 21: 左親指 - 明るい紫
+    (255, 0, 255),    # 22: 右親指 - マゼンタ
+    (255, 0, 200),    # 23: 左腰 - ピンクマゼンタ
+    (255, 0, 150),    # 24: 右腰 - 明るいピンク
+    (255, 0, 100),    # 25: 左膝 - ピンク
+    (255, 0, 50),     # 26: 右膝 - サーモンピンク
+    (255, 100, 100),  # 27: 左足首 - ライトコーラル
+    (255, 150, 150),  # 28: 右足首 - ピーチ
+    (255, 200, 200),  # 29: 左かかと - ライトピンク
+    (200, 200, 255),  # 30: 右かかと - ライトブルー
+    (150, 150, 255),  # 31: 左つま先 - ライトパープル
+    (100, 100, 255)   # 32: 右つま先 - パープルブルー
+]
+
 # === 腰が一番低いフレームを抽出 ===
 landmark_y = defaultdict(list)
 
@@ -216,13 +253,6 @@ for frame, y_list in landmark_y.items():
 # === ここからPose処理 ===
 mp_pose = mp.solutions.pose
 POSE_CONNECTIONS = mp_pose.POSE_CONNECTIONS
-
-LANDMARK_COLORS = [
-    (0, 255, 255), (0, 255, 0), (255, 0, 255), (255, 255, 0), (255, 105, 180),
-    (0, 255, 127), (255, 69, 0), (0, 191, 255), (255, 20, 147), (124, 252, 0),
-    (30, 144, 255), (50, 205, 50), (255, 0, 0), (0, 0, 255), (255, 165, 0),
-    (0, 255, 255), (255, 255, 255)
-] * 2
 
 landmark_dict = {}
 with open('trainer_squat.csv', newline='') as csvfile:
@@ -283,7 +313,6 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
             # 指示画面を作成
             instruction_frame = create_instruction_screen()
             
-            # ★修正点②: 全ての指示を同じフォントサイズ(1.5)で表示
             if mode == 'instruction_intro':
                 draw_centered_text(instruction_frame, INSTRUCTIONS['intro'], font_scale=1.5, line_spacing=50)
             elif mode == 'instruction_learning':
@@ -314,7 +343,7 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
         
         # === お手本動画の再生 ===
         elif mode == 'example_video':
-            # お手本動画を再生（コメントアウト部分を使用）
+            # お手本動画を再生
             example_video = cv2.VideoCapture('movie/squat_new.mp4')
             
             while example_video.isOpened():
@@ -351,7 +380,6 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
                 mode = 'countdown'
                 countdown_start_time = time.time()
             
-            # ★修正点①: 待機メッセージを画面中央上部に表示
             draw_centered_text_top(frame, "Raise both hands to start!", 
                                  font_scale=1.0, color=(255, 255, 255), thickness=2, y_offset=100)
 
@@ -511,7 +539,6 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
                 draw_evaluation_message(frame, current_evaluation_message, current_evaluation_color, current_knee_angle)
 
         elif mode == 'end':
-            # ★修正点③: "Training Finished!"を背景付きで画面中央上部に表示
             draw_centered_text_top(frame, "Training Finished!", 
                                  font_scale=2, color=(255, 255, 255), y_offset=100)
             cv2.imshow('Squat Training System', frame)
